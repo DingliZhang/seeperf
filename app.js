@@ -1,7 +1,6 @@
 // All parsing, matching and rendering happens locally in this browser tab.
 const $ = (selector) => document.querySelector(selector);
 const state = { datasets: [], baselineId: null, demo: false, rows: [], visible: [] };
-const PALETTE = ['#386fa4', '#e49a42', '#8a71b0', '#47a995', '#d16f77', '#6e94b7'];
 const TYPE_NAMES = { Byte: 'byte array', Short: 'short array', Int: 'int array', Long: 'long array', Char: 'char array', Float: 'float array', Double: 'double array', Boolean: 'boolean array', Object: 'object array' };
 const DEMO_TEXT = {
   a: String.raw`Benchmark                                   (delta)  (size)  Mode  Cnt   Score   Error  Units
@@ -62,7 +61,11 @@ Finished running test 'micro:com.arm.benchmarks.intrinsics.StringCompareToDiffer
 function esc(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]); }
 function cleanNumber(value) { if (value === null || value === undefined || String(value).trim() === '') return NaN; if (typeof value === 'number') return value; const n = Number(String(value).replace(/,/g, '').replace(/^[±+]/, '').trim()); return Number.isFinite(n) ? n : NaN; }
 function fmt(value, decimals = 3) { return Number.isFinite(value) ? value.toLocaleString('en-US', { maximumFractionDigits: decimals, minimumFractionDigits: decimals }) : '—'; }
-function pct(value) { return Number.isFinite(value) ? `${value > 0 ? '+' : ''}${fmt(value, 1)}%` : '—'; }
+function pct(value) {
+  if (!Number.isFinite(value)) return '—';
+  const rounded = Number(value.toFixed(1));
+  return rounded === 0 ? '0.0%' : `${rounded > 0 ? '+' : ''}${fmt(rounded, 1)}%`;
+}
 function shortName(name) { return name.split('.').pop(); }
 function rowKey(row) { return `${row.benchmark}\u0000${row.mode}\u0000${JSON.stringify(Object.entries(row.params).sort(([a], [b]) => a.localeCompare(b)))}`; }
 function normalizeRow(input) {
@@ -199,8 +202,11 @@ function getComparison(row, id) {
   return (target.score - base.score) / Math.abs(base.score) * 100;
 }
 function availableComparisons() { return state.datasets.filter(x => x.id !== state.baselineId); }
-function colorFor(series, seriesList) { return PALETTE[seriesList.indexOf(series) % PALETTE.length]; }
-function isBetter(delta, row) { return compareMode(row.scores.get(state.baselineId) || [...row.scores.values()][0]) === 'throughput' ? delta > 0 : delta < 0; }
+function isBetter(delta, row) {
+  const mode = compareMode(row.scores.get(state.baselineId) || [...row.scores.values()][0]);
+  if (delta === 0 || mode === 'unknown') return null;
+  return mode === 'throughput' ? delta > 0 : delta < 0;
+}
 
 function renderDatasets() {
   const list = $('#datasetList'); list.innerHTML = '';
@@ -240,7 +246,7 @@ function renderMetrics() {
   const variants = availableComparisons();
   const comparable = variants.flatMap(v => state.rows.map(row => ({ row, delta: getComparison(row, v.id) })).filter(x => x.delta !== null));
   const faster = comparable.filter(x => isBetter(x.delta, x.row)).length;
-  const slower = comparable.filter(x => !isBetter(x.delta, x.row) && x.delta !== 0).length;
+  const slower = comparable.filter(x => isBetter(x.delta, x.row) === false).length;
   const base = state.datasets.find(x => x.id === state.baselineId);
   const values = variants.length ? [
     ['Valid comparisons', String(comparable.length), 'Matched method, parameters, and unit', ''],
@@ -265,43 +271,42 @@ function chartExtent(values) {
   const step = [5,10,20,25,50,100,200,500,1000,2000,5000].find(x => x >= rough) || Math.pow(10, Math.ceil(Math.log10(rough)));
   return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
 }
-function chartMarkup(row, variants, series, extent, singleMax) {
+function chartMarkup(row, variants, extent, singleMax) {
   const base = row.scores.get(state.baselineId);
-  const bars = variants.length ? variants.flatMap((variant, vi) => {
+  const bars = variants.length ? variants.flatMap(variant => {
     const delta = getComparison(row, variant.id), measure = row.scores.get(variant.id);
     if (delta === null) return [];
-    const color = colorFor(row.series, series), zero = -extent.min / (extent.max - extent.min) * 100;
+    const zero = -extent.min / (extent.max - extent.min) * 100;
+    const direction = isBetter(delta, row);
+    const tone = direction === null ? '' : direction ? 'better' : 'worse';
     const end = Math.max(0, Math.min(100, (delta - extent.min) / (extent.max - extent.min) * 100));
     const left = Math.min(zero, end), width = Math.abs(end - zero);
-    const nearEdge = delta >= 0 ? end > 81 : end < 19;
-    const labelLeft = delta >= 0 ? nearEdge ? end - 2 : end + 2 : nearEdge ? end + 2 : end - 2;
-    const labelTransform = delta >= 0 ? nearEdge ? 'translateX(-100%)' : 'none' : nearEdge ? 'none' : 'translateX(-100%)';
-    return `<div class="bar-line" title="${esc(row.series)} · ${esc(variant.name)}: ${pct(delta)} | ${fmt(base.score)} → ${fmt(measure.score)} ${esc(base.unit)}"><span class="bar" style="left:${left}%;width:${width}%;background:${color};opacity:${vi ? .58 : 1}"></span><span class="bar-value" style="left:${labelLeft}%;transform:${labelTransform}">${pct(delta)}</span></div>`;
-  }) : base ? (() => { const width = Math.max(1, Math.log1p(Math.max(0, base.score)) / Math.log1p(singleMax) * 94); return [`<div class="bar-line" title="${esc(row.series)}: ${fmt(base.score)} ${esc(base.unit)}"><span class="bar" style="left:0;width:${width}%;background:${colorFor(row.series, series)}"></span><span class="bar-value" style="left:${Math.min(80, width + 2)}%">${fmt(base.score, 2)}</span></div>`]; })() : [];
+    return `<div class="bar-line" title="${esc(row.series)} · ${esc(variant.name)}: ${pct(delta)} | ${fmt(base.score)} → ${fmt(measure.score)} ${esc(base.unit)}"><span class="bar-plot"><span class="zero-line" style="left:${zero}%"></span>${tone ? `<span class="bar ${tone}" style="left:${left}%;width:${width}%"></span>` : ''}<span class="bar-value ${delta < 0 ? 'negative' : ''}" style="left:${end}%">${pct(delta)}</span></span></div>`;
+  }) : base ? (() => {
+    const width = Math.max(1, Math.log1p(Math.max(0, base.score)) / Math.log1p(singleMax) * 94);
+    return [`<div class="bar-line" title="${esc(row.series)}: ${fmt(base.score)} ${esc(base.unit)}"><span class="bar-plot"><span class="bar raw" style="left:0;width:${width}%"></span><span class="bar-value" style="left:${width}%">${fmt(base.score, 2)}</span></span></div>`];
+  })() : [];
   return bars.join('');
 }
 function renderCharts(rows) {
   const variants = availableComparisons();
-  const series = [...new Set(rows.map(x => x.series))].sort();
-  $('#legend').innerHTML = series.map(s => `<span class="legend-item"><i class="legend-swatch" style="background:${colorFor(s, series)}"></i>${esc(s)}</span>`).join('');
+  $('#legend').innerHTML = variants.length ? '<span class="legend-item"><i class="legend-swatch better"></i>Improvement</span><span class="legend-item"><i class="legend-swatch worse"></i>Regression</span>' : '';
   const deltas = variants.flatMap(v => rows.map(row => getComparison(row, v.id)).filter(x => x !== null));
   const extent = chartExtent(deltas);
   $('#chartTitle').textContent = variants.length ? 'Change vs. baseline' : 'Raw score distribution';
-  $('#chartSubtitle').textContent = variants.length ? `Shared scale ${extent.min}% to +${extent.max}% · ${variants.length === 2 ? `solid ${variants[0].name} / lighter ${variants[1].name} · ` : ''}negative left / positive right` : 'Separate logarithmic scale per group · exact values below';
-  $('#changeKey').hidden = !variants.length;
+  $('#chartSubtitle').textContent = variants.length ? `Shared scale ${extent.min}% to +${extent.max}% · ${variants.length === 2 ? 'bars follow dataset order · ' : ''}negative left / positive right · values beside bar ends` : 'Separate logarithmic scale per group · exact values below';
   const groups = [...new Set(rows.map(x => x.group))];
   $('#chartGrid').innerHTML = groups.length ? groups.map(group => {
     const groupRows = rows.filter(row => row.group === group), sizes = [...new Set(groupRows.map(x => x.size))];
     const singleMax = Math.max(1, ...groupRows.map(row => row.scores.get(state.baselineId)?.score || 0));
     const ticks = variants.length ? Array.from({ length: Math.round((extent.max - extent.min) / extent.step) + 1 }, (_, i) => `${extent.min + i * extent.step > 0 ? '+' : ''}${extent.min + i * extent.step}%`) : ['0', `${fmt(Math.sqrt(singleMax + 1) - 1, 0)}`, `${fmt(singleMax, 0)}`];
-    const zero = -extent.min / (extent.max - extent.min) * 100;
     return `<article class="chart-panel"><div class="panel-head"><h3>${esc(group)} <small>${esc(groupRows[0]?.mode || '')}</small></h3><span>${sizes.length} SIZES</span></div><div class="panel-scale">${ticks.map(t => `<span>${esc(t)}</span>`).join('')}</div><div class="plot-area">${sizes.map(size => {
       const these = groupRows.filter(row => row.size === size);
       const exactPower = Number(size) > 0 && Number.isInteger(Math.log2(Number(size)));
-      return `<div class="plot-row"><span class="row-label ${exactPower ? 'power' : ''}" title="${esc(size)}">${esc(size)}</span><div class="row-track">${variants.length ? `<span class="zero-line" style="left:${zero}%"></span>` : ''}${these.map(row => chartMarkup(row, variants, series, extent, singleMax)).join('') || '<span class="missing-value">No match</span>'}</div></div>`;
+      return `<div class="plot-row"><span class="row-label ${exactPower ? 'power' : ''}" title="${esc(size)}">${esc(size)}</span><div class="row-track">${these.map(row => chartMarkup(row, variants, extent, singleMax)).join('') || '<span class="missing-value">No match</span>'}</div></div>`;
     }).join('')}</div></article>`;
   }).join('') : '<div class="no-results">No records match these filters. Try another group, method, or threshold.</div>';
-  $('#chartFootnote').textContent = variants.length ? 'Only point estimates matched by Benchmark, Mode, parameters, and unit appear in the chart. See the table for reported errors; bar length or error ranges alone do not establish statistical significance. Colors identify methods; lighter bars show the second variant.' : 'With one dataset, bars show raw Scores on a logarithmic scale. Do not compare bar lengths across groups or units.';
+  $('#chartFootnote').textContent = variants.length ? 'Only point estimates matched by Benchmark, Mode, parameters, and unit appear in the chart. See the table for reported errors; bar length or error ranges alone do not establish statistical significance. Green bars mark improvements and coral bars regressions, regardless of method. Unchanged results and modes with unknown performance direction have no colored bar. Percentages sit just beyond each bar end.' : 'With one dataset, neutral bars show raw Scores on a logarithmic scale. Do not compare bar lengths across groups or units.';
 }
 
 function renderTable(rows) {
@@ -311,7 +316,9 @@ function renderTable(rows) {
     const b = row.scores.get(state.baselineId);
     const measured = entry => entry ? `${fmt(entry.score)}${entry.error === null ? '' : ` ± ${fmt(entry.error)}`}` : '—';
     return `<tr><td title="${esc(row.benchmark)}">${esc(shortName(row.benchmark))}</td><td title="${esc(JSON.stringify(row.params))}">${esc(row.size)}${row.other ? ` · ${esc(row.other)}` : ''}</td><td>${esc(row.mode)}</td><td class="${b ? '' : 'dim'}">${measured(b)}</td>${variants.map(v => {
-      const entry = row.scores.get(v.id), delta = getComparison(row, v.id), tone = delta === null || delta === 0 ? 'dim' : isBetter(delta, row) ? 'delta-good' : 'delta-bad';
+      const entry = row.scores.get(v.id), delta = getComparison(row, v.id);
+      const direction = delta === null ? null : isBetter(delta, row);
+      const tone = direction === null ? 'dim' : direction ? 'delta-good' : 'delta-bad';
       return `<td class="${entry ? '' : 'dim'}">${measured(entry)}${entry && b && entry.unit !== b.unit ? ` <span class="dim">(${esc(entry.unit)})</span>` : ''}</td><td class="${tone}">${pct(delta)}</td>`;
     }).join('')}<td>${esc(b?.unit || [...row.scores.values()][0]?.unit || '')}</td></tr>`;
   }).join('');

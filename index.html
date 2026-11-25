@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>SeePerf — Benchmark Comparison</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
     <div class="app-shell">
@@ -37,7 +37,7 @@
               <label>Parameter <select id="sizeFilter"><option value="all">All values</option></select></label>
               <label class="threshold-control" id="thresholdWrap">Change threshold <select id="thresholdFilter"><option value="0">All changes</option><option value="1">≥ 1%</option><option value="5">≥ 5%</option><option value="10">≥ 10%</option><option value="20">≥ 20%</option></select></label>
             </div>
-            <div class="chart-intro"><div><strong id="chartTitle">Change vs. baseline</strong><span id="chartSubtitle"></span></div><div class="change-key" id="changeKey"><span><i class="key-dot better"></i> Faster</span><span><i class="key-dot worse"></i> Slower</span><span><i class="key-dot unsure"></i> Point estimates only</span></div></div>
+            <div class="chart-intro"><div><strong id="chartTitle">Change vs. baseline</strong><span id="chartSubtitle"></span></div></div>
             <div class="chart-grid" id="chartGrid"></div>
             <p class="chart-footnote" id="chartFootnote"></p>
 
@@ -49,6 +49,6 @@
         </div>
       </main>
     </div>
-    <script src="./app.js" defer></script>
+    <script src="./app.js?v=6" defer></script>
   </body>
 </html>
