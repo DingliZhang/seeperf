@@ -273,6 +273,10 @@ function chartExtent(values) {
 }
 function chartMarkup(row, variants, extent, singleMax) {
   const base = row.scores.get(state.baselineId);
+  const baselineName = state.datasets.find(dataset => dataset.id === state.baselineId)?.name || 'Baseline';
+  const parameters = Object.entries(row.params).map(([key, value]) => `${key}=${value}`).join(' · ') || 'No parameters';
+  const scoreDetail = entry => `${fmt(entry.score)}${entry.error === null ? '' : ` ± ${fmt(entry.error)}`} ${entry.unit}`;
+  const description = `${row.benchmark}\n${parameters} · ${row.mode}`;
   const bars = variants.length ? variants.flatMap(variant => {
     const delta = getComparison(row, variant.id), measure = row.scores.get(variant.id);
     if (delta === null) return [];
@@ -281,14 +285,17 @@ function chartMarkup(row, variants, extent, singleMax) {
     const tone = direction === null ? '' : direction ? 'better' : 'worse';
     const end = Math.max(0, Math.min(100, (delta - extent.min) / (extent.max - extent.min) * 100));
     const left = Math.min(zero, end), width = Math.abs(end - zero);
-    return `<div class="bar-line" title="${esc(row.series)} · ${esc(variant.name)}: ${pct(delta)} | ${fmt(base.score)} → ${fmt(measure.score)} ${esc(base.unit)}"><span class="bar-plot"><span class="zero-line" style="left:${zero}%"></span>${tone ? `<span class="bar ${tone}" style="left:${left}%;width:${width}%"></span>` : ''}<span class="bar-value ${delta < 0 ? 'negative' : ''}" style="left:${end}%">${pct(delta)}</span></span></div>`;
+    const detail = `${description}\nBaseline (${baselineName}): ${scoreDetail(base)}\nVariant (${variant.name}): ${scoreDetail(measure)}\nCalculation: (${measure.score} − ${base.score}) ÷ |${base.score}| × 100\n= ${delta > 0 ? '+' : ''}${fmt(delta, 3)}% · ${direction === null ? 'No direction' : direction ? 'Improvement' : 'Regression'}`;
+    return `<div class="bar-line" tabindex="0" role="img" aria-label="${esc(detail)}" data-tooltip="${esc(detail)}"><span class="bar-plot"><span class="zero-line" style="left:${zero}%"></span>${tone ? `<span class="bar ${tone}" style="left:${left}%;width:${width}%"></span>` : ''}<span class="bar-value ${delta < 0 ? 'negative' : ''}" style="left:${end}%">${pct(delta)}</span></span></div>`;
   }) : base ? (() => {
     const width = Math.max(1, Math.log1p(Math.max(0, base.score)) / Math.log1p(singleMax) * 94);
-    return [`<div class="bar-line" title="${esc(row.series)}: ${fmt(base.score)} ${esc(base.unit)}"><span class="bar-plot"><span class="bar raw" style="left:0;width:${width}%"></span><span class="bar-value" style="left:${width}%">${fmt(base.score, 2)}</span></span></div>`];
+    const detail = `${description}\n${baselineName}: ${scoreDetail(base)}`;
+    return [`<div class="bar-line" tabindex="0" role="img" aria-label="${esc(detail)}" data-tooltip="${esc(detail)}"><span class="bar-plot"><span class="bar raw" style="left:0;width:${width}%"></span><span class="bar-value" style="left:${width}%">${fmt(base.score, 2)}</span></span></div>`];
   })() : [];
   return bars.join('');
 }
 function renderCharts(rows) {
+  $('#chartTooltip').hidden = true;
   const variants = availableComparisons();
   $('#legend').innerHTML = variants.length ? '<span class="legend-item"><i class="legend-swatch better"></i>Improvement</span><span class="legend-item"><i class="legend-swatch worse"></i>Regression</span>' : '';
   const deltas = variants.flatMap(v => rows.map(row => getComparison(row, v.id)).filter(x => x !== null));
@@ -345,6 +352,29 @@ function exportCsv() {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a'); link.href = url; link.download = 'benchmark-comparison.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+const chartGrid = $('#chartGrid');
+const chartTooltip = $('#chartTooltip');
+function showChartTooltip(line, x, y) {
+  chartTooltip.textContent = line.dataset.tooltip;
+  chartTooltip.hidden = false;
+  const rect = chartTooltip.getBoundingClientRect();
+  chartTooltip.style.left = `${Math.max(12, Math.min(x + 14, window.innerWidth - rect.width - 12))}px`;
+  chartTooltip.style.top = `${y + rect.height + 16 < window.innerHeight ? y + 16 : Math.max(12, y - rect.height - 12)}px`;
+}
+chartGrid.addEventListener('pointermove', event => {
+  const line = event.target.closest('.bar-line');
+  if (line) showChartTooltip(line, event.clientX, event.clientY);
+  else chartTooltip.hidden = true;
+});
+chartGrid.addEventListener('pointerleave', () => { chartTooltip.hidden = true; });
+chartGrid.addEventListener('focusin', event => {
+  const line = event.target.closest('.bar-line');
+  if (!line) return;
+  const rect = line.getBoundingClientRect();
+  showChartTooltip(line, rect.left + rect.width / 2, rect.bottom);
+});
+chartGrid.addEventListener('focusout', () => { chartTooltip.hidden = true; });
 
 $('#fileInput').addEventListener('change', async event => { await addFiles(event.target.files); event.target.value = ''; });
 $('#dropzone').addEventListener('click', () => $('#fileInput').click());
