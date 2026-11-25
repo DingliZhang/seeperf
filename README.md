@@ -1,0 +1,19 @@
+# SeePerf — Benchmark Comparison
+
+A static, English-only frontend. Open `index.html` in your browser; no build step or backend is required. Uploaded files are parsed locally in the current browser tab and are never sent to a server. The built-in demo compares 24 matching JMH measurements each from `a.txt` and `b.txt` (StringCompareToDifferentLength).
+
+All files needed for the site are in this folder: `index.html`, `app.js`, and `styles.css`. Keep them together and put `index.html` at the root when publishing this project. The included demo loads automatically; your own data files are not stored between visits.
+
+## Using the tool
+
+1. Click **Add data files** or drag in one to three `.txt`, `.csv`, or `.json` files. The first upload replaces the demo.
+2. With one dataset, inspect raw scores. With two or three datasets, results match by Benchmark, Mode, and all parameters. The first dataset is the default baseline; click **Set as baseline** on another dataset to change it.
+3. Compare the change `(variant − baseline) / |baseline| × 100%` in grouped charts. The table includes the original Score and JMH Error. Filter the view, export the displayed rows to CSV, or print the report as a PDF from your browser.
+
+## Supported formats
+
+- **JMH TXT:** Standard tabular JMH output such as `Benchmark (size) Mode Cnt Score Error Units`, including multiple parameters and optional `±` error values.
+- **JMH CSV:** Standard columns such as `Benchmark,Mode,...,Score,Score Error (99.9%),Unit,Param: size`. A simplified `method,size,score,error,unit` file also works.
+- **JMH JSON:** An array of JMH results with `benchmark`, `params`, `mode`, and `primaryMetric` fields. Simplified arrays and `{ "results": [...] }` are also supported.
+
+You can upload at most three files, each up to 8 MB. If a file contains repeated Benchmark + Mode + parameter keys, the last record is kept. Scores with mismatched units are displayed but not compared; neither are zero baseline scores. Lower is faster for `avgt` / `sample` / `ss`, while higher is faster for `thrpt`. Charts show point estimates only—**they do not establish statistical significance**.
