@@ -146,9 +146,9 @@ function parseFile(text, filename) {
 function loadDemo() {
   const a = parseFile(DEMO_TEXT.a, 'a.txt').rows;
   const b = parseFile(DEMO_TEXT.b, 'b.txt').rows;
-  state.datasets = [{ id: 'demo-a', name: 'a', file: 'a.txt · built-in demo', rows: a }, { id: 'demo-b', name: 'b', file: 'b.txt · built-in demo', rows: b }];
+  state.datasets = [{ id: 'demo-a', name: 'a', file: 'a.txt · built-in demo', source: DEMO_TEXT.a, rows: a, isDemo: true }, { id: 'demo-b', name: 'b', file: 'b.txt · built-in demo', source: DEMO_TEXT.b, rows: b, isDemo: true }];
   state.baselineId = 'demo-a'; state.demo = true;
-  setMessage(`Loaded ${a.length} records each from a.txt and b.txt. Upload your own files to replace this demo.`, false);
+  setMessage(`Loaded ${a.length} records each from a.txt and b.txt. Upload files or paste data to replace this demo.`, false);
   render();
 }
 
@@ -162,8 +162,9 @@ async function addFiles(files) {
     for (const file of incoming) {
       if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB file limit`);
       if (!/\.(txt|csv|json)$/i.test(file.name)) throw new Error(`${file.name} is not a supported TXT / CSV / JSON file`);
-      const result = parseFile(await file.text(), file.name);
-      parsed.push({ id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, name: file.name.replace(/\.[^.]+$/, ''), file: file.name, rows: result.rows, duplicates: result.duplicates });
+      const source = await file.text();
+      const result = parseFile(source, file.name);
+      parsed.push({ id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, name: file.name.replace(/\.[^.]+$/, ''), file: file.name, source, rows: result.rows, duplicates: result.duplicates });
     }
   } catch (error) { setMessage(`Import failed: ${error.message}. Existing datasets were not changed.`, true); return; }
   state.datasets = [...current, ...parsed]; state.baselineId = state.demo ? parsed[0].id : state.baselineId || parsed[0].id; state.demo = false;
@@ -171,6 +172,68 @@ async function addFiles(files) {
   const recordCount = parsed.reduce((sum, item) => sum + item.rows.length, 0);
   setMessage(`Imported ${parsed.length} ${parsed.length === 1 ? 'dataset' : 'datasets'} with ${recordCount} ${recordCount === 1 ? 'record' : 'records'}.${duplicateCount ? ` ${duplicateCount} duplicate ${duplicateCount === 1 ? 'key' : 'keys'} found; the last record was kept.` : ''}`);
   render();
+}
+
+// Paste edits are parsed before touching the current dataset, so invalid input is safe to cancel.
+let editingDatasetId = null;
+function nextPastedName(isBaseline) {
+  if (isBaseline) return 'base';
+  let number = 1;
+  while (state.datasets.some(dataset => dataset.name === `variant ${number}`)) number++;
+  return `variant ${number}`;
+}
+function openDatasetEditor(dataset = null) {
+  if (!dataset && !state.demo && state.datasets.length >= 3) return;
+  editingDatasetId = dataset?.id ?? null;
+  $('#editDatasetTitle').textContent = dataset ? `Edit ${dataset.name}` : 'Paste new dataset';
+  $('#editDatasetHelp').textContent = dataset
+    ? 'Paste JMH TXT, CSV, or JSON results. Apply replaces only this dataset in the current page and recalculates the comparison. Local files are not changed.'
+    : state.demo ? 'Paste JMH TXT, CSV, or JSON results. Apply replaces the demo in this page and makes this dataset the baseline.' : 'Paste JMH TXT, CSV, or JSON results. Apply adds this dataset to the current page.';
+  $('#editDatasetSource').textContent = dataset?.file || '';
+  $('#editDatasetText').value = dataset?.source || '';
+  $('#editDatasetError').hidden = true;
+  $('#editDatasetError').textContent = '';
+  $('#editDatasetDialog').showModal();
+  $('#editDatasetText').focus();
+}
+function applyDatasetEditor() {
+  const dataset = state.datasets.find(item => item.id === editingDatasetId);
+  if (editingDatasetId && !dataset) { $('#editDatasetDialog').close(); return; }
+  const text = $('#editDatasetText').value;
+  const errorEl = $('#editDatasetError');
+  try {
+    if (!dataset && !state.demo && state.datasets.length >= 3) throw new Error('You can have up to 3 datasets');
+    if (new Blob([text]).size > 8 * 1024 * 1024) throw new Error('Pasted data exceeds the 8 MB limit');
+    // Content detection accepts TXT, CSV, or JSON regardless of the old file's extension.
+    const result = parseFile(text, 'pasted.txt');
+    let selected;
+    if (dataset) {
+      if (dataset.isDemo) dataset.name = nextPastedName(dataset.id === state.baselineId);
+      dataset.rows = result.rows;
+      dataset.source = text;
+      dataset.file = 'Pasted data';
+      dataset.isDemo = false;
+      selected = dataset;
+    } else {
+      const isBaseline = state.demo || state.datasets.length === 0;
+      selected = {
+        id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        name: nextPastedName(isBaseline), file: 'Pasted data', source: text, rows: result.rows
+      };
+      state.datasets = state.demo ? [selected] : [...state.datasets, selected];
+      if (isBaseline) state.baselineId = selected.id;
+    }
+    state.demo = false;
+    const index = state.datasets.indexOf(selected);
+    $('#editDatasetDialog').close();
+    setMessage(`${dataset ? 'Updated' : 'Added'} ${selected.name} with ${result.rows.length} records.${result.duplicates ? ` ${result.duplicates} duplicate keys found; the last record was kept.` : ''}`);
+    render();
+    $('#datasetList').querySelectorAll('.edit-data')[index]?.focus();
+  } catch (error) {
+    errorEl.textContent = `Could not apply data: ${error.message}. Existing datasets have not changed.`;
+    errorEl.hidden = false;
+    $('#editDatasetText').focus();
+  }
 }
 
 function describe(row) {
@@ -212,13 +275,16 @@ function renderDatasets() {
   const list = $('#datasetList'); list.innerHTML = '';
   state.datasets.forEach((dataset, index) => {
     const card = document.createElement('div'); card.className = `dataset-card ${dataset.id === state.baselineId ? 'baseline' : ''}`;
-    card.innerHTML = `<div class="dataset-number">DATASET ${String(index + 1).padStart(2, '0')}</div><div class="dataset-tag ${dataset.id === state.baselineId ? '' : 'variant'}">${dataset.id === state.baselineId ? '● Baseline' : '◆ Variant'}</div><input class="dataset-name" aria-label="Dataset name" maxlength="48" value="${esc(dataset.name)}"><div class="dataset-meta">${dataset.rows.length} records · ${esc(dataset.file)}</div><div class="dataset-actions">${dataset.id === state.baselineId ? '' : '<button class="dataset-action make-base" type="button">Set as baseline</button>'}<button class="dataset-action remove" type="button">Remove</button></div>`;
-    card.querySelector('.dataset-name').addEventListener('input', e => { dataset.name = e.target.value || `Dataset ${index + 1}`; renderResults(); });
+    card.innerHTML = `<div class="dataset-number">DATASET ${String(index + 1).padStart(2, '0')}</div><div class="dataset-tag ${dataset.id === state.baselineId ? '' : 'variant'}">${dataset.id === state.baselineId ? '● Baseline' : '◆ Variant'}</div><div class="dataset-name" title="${esc(dataset.name)}">${esc(dataset.name)}</div><div class="dataset-meta">${dataset.rows.length} records · ${esc(dataset.file)}</div><div class="dataset-actions"><button class="dataset-action edit-data" type="button" aria-label="Edit data for ${esc(dataset.name)}">Edit data</button>${dataset.id === state.baselineId ? '' : '<button class="dataset-action make-base" type="button">Set as baseline</button>'}<button class="dataset-action remove" type="button">Remove</button></div>`;
+    card.addEventListener('click', event => { if (!event.target.closest('button')) openDatasetEditor(dataset); });
+    card.querySelector('.edit-data').addEventListener('click', () => openDatasetEditor(dataset));
     card.querySelector('.make-base')?.addEventListener('click', () => { state.baselineId = dataset.id; render(); });
     card.querySelector('.remove').addEventListener('click', () => { state.datasets = state.datasets.filter(x => x.id !== dataset.id); if (state.baselineId === dataset.id) state.baselineId = state.datasets[0]?.id || null; state.demo = false; setMessage('Dataset removed.'); render(); });
     list.append(card);
   });
-  for (let i = state.datasets.length; i < 3; i++) { const slot = document.createElement('div'); slot.className = 'empty-slot'; slot.innerHTML = `<span>0${i + 1}</span> Awaiting dataset`; list.append(slot); }
+  if (state.demo) {
+    const slot = document.createElement('button'); slot.type = 'button'; slot.className = 'empty-slot'; slot.innerHTML = '<span>＋</span> Paste your own data (replaces demo)'; slot.addEventListener('click', () => openDatasetEditor()); list.append(slot);
+  } else for (let i = state.datasets.length; i < 3; i++) { const slot = document.createElement('button'); slot.type = 'button'; slot.className = 'empty-slot'; slot.innerHTML = `<span>0${i + 1}</span> Paste new dataset`; slot.addEventListener('click', () => openDatasetEditor()); list.append(slot); }
   $('#dropzone').disabled = state.datasets.length >= 3 && !state.demo;
 }
 
@@ -376,6 +442,10 @@ chartGrid.addEventListener('focusin', event => {
 });
 chartGrid.addEventListener('focusout', () => { chartTooltip.hidden = true; });
 
+$('#applyDatasetEdit').addEventListener('click', applyDatasetEditor);
+$('#cancelDatasetEdit').addEventListener('click', () => $('#editDatasetDialog').close());
+$('#editDatasetDialog').addEventListener('close', () => { editingDatasetId = null; });
+$('#editDatasetText').addEventListener('input', () => { $('#editDatasetError').hidden = true; });
 $('#fileInput').addEventListener('change', async event => { await addFiles(event.target.files); event.target.value = ''; });
 $('#dropzone').addEventListener('click', () => $('#fileInput').click());
 for (const type of ['dragenter', 'dragover']) $('#dropzone').addEventListener(type, e => { e.preventDefault(); $('#dropzone').classList.add('dragover'); });

@@ -6,8 +6,8 @@ All files needed for the site are in this folder: `index.html`, `app.js`, and `s
 
 ## Using the tool
 
-1. Click **Add data files** or drag in one to three `.txt`, `.csv`, or `.json` files. The first upload replaces the demo.
-2. With one dataset, inspect raw scores. With two or three datasets, results match by Benchmark, Mode, and all parameters. The first dataset is the default baseline; click **Set as baseline** on another dataset to change it.
+1. Click **Add data files** or drag in one to three `.txt`, `.csv`, or `.json` files. Or click an empty dataset slot to paste a new dataset. The first file upload or newly pasted dataset replaces the demo.
+2. Click a dataset card or its **Edit data** button to paste replacement JMH TXT, CSV, or JSON results. Apply updates only that dataset in the current page and recalculates the comparison; it does not modify local files or save data between page reloads. Invalid data leaves the dataset unchanged. Pasted datasets without filenames are named **base** for the first baseline and **variant 1** / **variant 2** for later datasets. With one dataset, inspect raw scores. With two or three datasets, results match by Benchmark, Mode, and all parameters. The first dataset is the default baseline; click **Set as baseline** on another dataset to change it.
 3. Compare the change `(variant − baseline) / |baseline| × 100%` in grouped charts. The table includes the original Score and JMH Error. Filter the view, export the displayed rows to CSV, or print the report as a PDF from your browser.
 
 ## Supported formats

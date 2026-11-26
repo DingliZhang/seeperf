@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>SeePerf — Benchmark Comparison</title>
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,12 +14,12 @@
 
         <div class="content-wrap">
           <section class="intro">
-            <div><div class="eyebrow"><span class="eyebrow-line"></span> PERFORMANCE ANALYSIS / 001</div><h1>See performance changes <em>at a glance.</em></h1><p>Upload JMH results and align them by method and parameters. Explore the changes, then inspect every original measurement.</p></div>
+            <div><div class="eyebrow"><span class="eyebrow-line"></span> PERFORMANCE ANALYSIS / 001</div><h1>See performance changes <em>at a glance.</em></h1><p>Upload or paste JMH results and align them by method and parameters. Explore the changes, then inspect every original measurement.</p></div>
             <div class="intro-actions"><button class="button button-ghost" id="demoBtn" type="button">↺ <span>Load demo</span></button><button class="button button-outline" id="printBtn" type="button">↗ <span>Print report</span></button></div>
           </section>
 
           <section class="upload-section" aria-labelledby="uploadHeading">
-            <div class="section-heading"><div><span class="section-index">01</span><h2 id="uploadHeading">Datasets</h2><span class="section-subtitle">DATA SOURCES</span></div><span class="section-note">Up to 3 files · the first is the default baseline</span></div>
+            <div class="section-heading"><div><span class="section-index">01</span><h2 id="uploadHeading">Datasets</h2><span class="section-subtitle">DATA SOURCES</span></div><span class="section-note">Up to 3 datasets · the first is the default baseline</span></div>
             <div class="upload-grid"><button type="button" id="dropzone" class="dropzone"><span class="upload-glyph">＋</span><strong>Add data files</strong><small>Click to browse or drag files here</small><span class="file-types">.txt <b>·</b> .csv <b>·</b> .json</span></button><input id="fileInput" type="file" accept=".txt,.csv,.json,text/plain,text/csv,application/json" multiple hidden />
               <div class="dataset-list" id="datasetList" aria-live="polite"></div>
             </div>
@@ -49,6 +49,13 @@
         </div>
       </main>
     </div>
-    <script src="./app.js?v=8" defer></script>
+    <dialog id="editDatasetDialog" class="edit-dialog" aria-labelledby="editDatasetTitle" aria-describedby="editDatasetHelp">
+      <div class="edit-dialog-header"><div><span class="eyebrow">DATASET EDITOR</span><h2 id="editDatasetTitle">Edit dataset</h2><p id="editDatasetHelp">Paste JMH TXT, CSV, or JSON results. Apply changes only this page; local files are not changed. Reloading clears your edits.</p></div></div>
+      <label class="edit-dialog-label" for="editDatasetText">Data <span id="editDatasetSource"></span></label>
+      <textarea id="editDatasetText" spellcheck="false" placeholder="Paste benchmark results here"></textarea>
+      <p class="edit-dialog-error" id="editDatasetError" role="alert" hidden></p>
+      <div class="edit-dialog-actions"><button type="button" class="button button-outline" id="cancelDatasetEdit">Cancel</button><button type="button" class="button edit-dialog-save" id="applyDatasetEdit">Apply data</button></div>
+    </dialog>
+    <script src="./app.js?v=12" defer></script>
   </body>
 </html>
