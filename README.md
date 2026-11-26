@@ -4,6 +4,11 @@ A static, English-only frontend. Open `index.html` in your browser; no build ste
 
 All files needed for the site are in this folder: `index.html`, `app.js`, and `styles.css`. Keep them together and put `index.html` at the root when publishing this project. The included demo loads automatically; your own data files are not stored between visits.
 
+## Compare two runs from the clipboard
+
+1. Under **Datasets**, click the **Baseline** card (`a` in the demo). Select all the text in the editor, paste the JMH results from before your change, and click **Apply data**.
+2. Click the **Variant** card (`b` in the demo). Replace its text with the results from after your change and click **Apply data**. The charts and the **Measurements** table update automatically.
+
 ## Using the tool
 
 1. Click **Add data files** or drag in one to three `.txt`, `.csv`, or `.json` files. Or click an empty dataset slot to paste a new dataset. The first file upload or newly pasted dataset replaces the demo.
