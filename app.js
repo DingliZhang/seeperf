@@ -228,7 +228,7 @@ function applyDatasetEditor() {
     $('#editDatasetDialog').close();
     setMessage(`${dataset ? 'Updated' : 'Added'} ${selected.name} with ${result.rows.length} records.${result.duplicates ? ` ${result.duplicates} duplicate keys found; the last record was kept.` : ''}`);
     render();
-    $('#datasetList').querySelectorAll('.edit-data')[index]?.focus();
+    $('#datasetList').querySelectorAll('.dataset-edit-target')[index]?.focus();
   } catch (error) {
     errorEl.textContent = `Could not apply data: ${error.message}. Existing datasets have not changed.`;
     errorEl.hidden = false;
@@ -275,9 +275,8 @@ function renderDatasets() {
   const list = $('#datasetList'); list.innerHTML = '';
   state.datasets.forEach((dataset, index) => {
     const card = document.createElement('div'); card.className = `dataset-card ${dataset.id === state.baselineId ? 'baseline' : ''}`;
-    card.innerHTML = `<div class="dataset-number">DATASET ${String(index + 1).padStart(2, '0')}</div><div class="dataset-tag ${dataset.id === state.baselineId ? '' : 'variant'}">${dataset.id === state.baselineId ? '● Baseline' : '◆ Variant'}</div><div class="dataset-name" title="${esc(dataset.name)}">${esc(dataset.name)}</div><div class="dataset-meta">${dataset.rows.length} records · ${esc(dataset.file)}</div><div class="dataset-actions"><button class="dataset-action edit-data" type="button" aria-label="Edit data for ${esc(dataset.name)}">Edit data</button>${dataset.id === state.baselineId ? '' : '<button class="dataset-action make-base" type="button">Set as baseline</button>'}<button class="dataset-action remove" type="button">Remove</button></div>`;
-    card.addEventListener('click', event => { if (!event.target.closest('button')) openDatasetEditor(dataset); });
-    card.querySelector('.edit-data').addEventListener('click', () => openDatasetEditor(dataset));
+    card.innerHTML = `<button class="dataset-edit-target" type="button" aria-label="Edit data for ${esc(dataset.name)}"></button><div class="dataset-number">DATASET ${String(index + 1).padStart(2, '0')}</div><div class="dataset-tag ${dataset.id === state.baselineId ? '' : 'variant'}">${dataset.id === state.baselineId ? '● Baseline' : '◆ Variant'}</div><div class="dataset-name" title="${esc(dataset.name)}">${esc(dataset.name)}</div><div class="dataset-meta">${dataset.rows.length} records · ${esc(dataset.file)}</div><div class="dataset-actions">${dataset.id === state.baselineId ? '' : '<button class="dataset-action make-base" type="button">Set as baseline</button>'}<button class="dataset-action remove" type="button">Remove</button></div>`;
+    card.querySelector('.dataset-edit-target').addEventListener('click', () => openDatasetEditor(dataset));
     card.querySelector('.make-base')?.addEventListener('click', () => { state.baselineId = dataset.id; render(); });
     card.querySelector('.remove').addEventListener('click', () => { state.datasets = state.datasets.filter(x => x.id !== dataset.id); if (state.baselineId === dataset.id) state.baselineId = state.datasets[0]?.id || null; state.demo = false; setMessage('Dataset removed.'); render(); });
     list.append(card);
@@ -450,7 +449,7 @@ chartGrid.addEventListener('focusout', () => { chartTooltip.hidden = true; });
 
 $('#applyDatasetEdit').addEventListener('click', applyDatasetEditor);
 $('#cancelDatasetEdit').addEventListener('click', () => $('#editDatasetDialog').close());
-$('#editDatasetDialog').addEventListener('close', () => { editingDatasetId = null; });
+$('#editDatasetDialog').addEventListener('close', () => { if (!$('#editDatasetDialog').open) editingDatasetId = null; });
 $('#editDatasetText').addEventListener('input', () => { $('#editDatasetError').hidden = true; });
 $('#fileInput').addEventListener('change', async event => { await addFiles(event.target.files); event.target.value = ''; });
 $('#dropzone').addEventListener('click', () => $('#fileInput').click());
