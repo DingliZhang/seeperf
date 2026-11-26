@@ -282,9 +282,15 @@ function renderDatasets() {
     card.querySelector('.remove').addEventListener('click', () => { state.datasets = state.datasets.filter(x => x.id !== dataset.id); if (state.baselineId === dataset.id) state.baselineId = state.datasets[0]?.id || null; state.demo = false; setMessage('Dataset removed.'); render(); });
     list.append(card);
   });
-  if (state.demo) {
-    const slot = document.createElement('button'); slot.type = 'button'; slot.className = 'empty-slot'; slot.innerHTML = '<span>＋</span> Paste your own data (replaces demo)'; slot.addEventListener('click', () => openDatasetEditor()); list.append(slot);
-  } else for (let i = state.datasets.length; i < 3; i++) { const slot = document.createElement('button'); slot.type = 'button'; slot.className = 'empty-slot'; slot.innerHTML = `<span>0${i + 1}</span> Paste new dataset`; slot.addEventListener('click', () => openDatasetEditor()); list.append(slot); }
+  for (let i = state.datasets.length; i < 3; i++) {
+    const slot = document.createElement('button');
+    slot.type = 'button';
+    slot.className = 'empty-slot';
+    slot.innerHTML = `<span>0${i + 1}</span> Awaiting dataset`;
+    slot.setAttribute('aria-label', state.demo ? 'Paste your own data to replace the demo' : `Paste dataset ${i + 1}`);
+    slot.addEventListener('click', () => openDatasetEditor());
+    list.append(slot);
+  }
   $('#dropzone').disabled = state.datasets.length >= 3 && !state.demo;
 }
 

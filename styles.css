@@ -29,4 +29,4 @@
 @media(max-width:480px){.edit-dialog{padding:18px}#editDatasetText{height:48vh}}
 @media print{.edit-dialog{display:none}}
 
-.empty-slot{cursor:pointer;font:11px 'DM Sans',sans-serif}.empty-slot:hover,.empty-slot:focus-visible{border-color:#8ecda8;background:#eff8f1;color:#275f47}
+.empty-slot{cursor:pointer;font:11px 'DM Sans',sans-serif}.empty-slot:hover{border-color:#8ecda8;background:#eff8f1;color:#275f47}.empty-slot:focus-visible{outline:2px solid #43a87c;outline-offset:2px}
